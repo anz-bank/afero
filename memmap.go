@@ -40,11 +40,15 @@ func NewMemMapFs() Fs {
 func (m *MemMapFs) getData() map[string]*mem.FileData {
 	m.init.Do(func() {
 		m.data = make(map[string]*mem.FileData)
-		// Root should always exist, right?
-		// TODO: what about windows?
-		root := mem.CreateDir(FilePathSeparator)
+		// Root should always exist
+		absolutePath, err := filepath.Abs(FilePathSeparator)
+		if err != nil {
+			log.Fatal(err)
+			panic(err)
+		}
+		root := mem.CreateDir(absolutePath)
 		mem.SetMode(root, os.ModeDir|0755)
-		m.data[FilePathSeparator] = root
+		m.data[absolutePath] = root
 	})
 	return m.data
 }
@@ -52,7 +56,12 @@ func (m *MemMapFs) getData() map[string]*mem.FileData {
 func (*MemMapFs) Name() string { return "MemMapFS" }
 
 func (m *MemMapFs) Create(name string) (File, error) {
-	name = normalizePath(name)
+	var err error
+	name, err = normalizePath(name)
+	if err != nil {
+		return nil, err
+	}
+
 	m.mu.Lock()
 	file := mem.CreateFile(name)
 	m.getData()[name] = file
@@ -113,7 +122,12 @@ func (m *MemMapFs) registerWithParent(f *mem.FileData, perm os.FileMode) {
 }
 
 func (m *MemMapFs) lockfreeMkdir(name string, perm os.FileMode) error {
-	name = normalizePath(name)
+	var err error
+	name, err = normalizePath(name)
+	if err != nil {
+		return err
+	}
+
 	x, ok := m.getData()[name]
 	if ok {
 		// Only return ErrFileExists if it's a file, not a directory.
@@ -132,7 +146,12 @@ func (m *MemMapFs) lockfreeMkdir(name string, perm os.FileMode) error {
 
 func (m *MemMapFs) Mkdir(name string, perm os.FileMode) error {
 	perm &= chmodBits
-	name = normalizePath(name)
+
+	var err error
+	name, err = normalizePath(name)
+	if err != nil {
+		return err
+	}
 
 	m.mu.RLock()
 	_, ok := m.getData()[name]
@@ -163,16 +182,22 @@ func (m *MemMapFs) MkdirAll(path string, perm os.FileMode) error {
 }
 
 // Handle some relative paths
-func normalizePath(path string) string {
+func normalizePath(path string) (string, error) {
 	path = filepath.Clean(path)
+	rootAbs, err := filepath.Abs(FilePathSeparator)
+	if err != nil {
+		return "", err
+	}
 
 	switch path {
 	case ".":
-		return FilePathSeparator
+		return rootAbs, nil
 	case "..":
-		return FilePathSeparator
+		return rootAbs, nil
+	case FilePathSeparator:
+		return rootAbs, nil
 	default:
-		return path
+		return path, nil
 	}
 }
 
@@ -193,7 +218,12 @@ func (m *MemMapFs) openWrite(name string) (File, error) {
 }
 
 func (m *MemMapFs) open(name string) (*mem.FileData, error) {
-	name = normalizePath(name)
+	var err error
+	name, err = normalizePath(name)
+	if err != nil {
+		return nil, err
+	}
+
 
 	m.mu.RLock()
 	f, ok := m.getData()[name]
@@ -205,7 +235,12 @@ func (m *MemMapFs) open(name string) (*mem.FileData, error) {
 }
 
 func (m *MemMapFs) lockfreeOpen(name string) (*mem.FileData, error) {
-	name = normalizePath(name)
+	var err error
+	name, err = normalizePath(name)
+	if err != nil {
+		return nil, err
+	}
+
 	f, ok := m.getData()[name]
 	if ok {
 		return f, nil
@@ -252,7 +287,12 @@ func (m *MemMapFs) OpenFile(name string, flag int, perm os.FileMode) (File, erro
 }
 
 func (m *MemMapFs) Remove(name string) error {
-	name = normalizePath(name)
+	var err error
+	name, err = normalizePath(name)
+	if err != nil {
+		return err
+	}
+
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -270,7 +310,12 @@ func (m *MemMapFs) Remove(name string) error {
 }
 
 func (m *MemMapFs) RemoveAll(path string) error {
-	path = normalizePath(path)
+	var err error
+	path, err = normalizePath(path)
+	if err != nil {
+		return err
+	}
+
 	m.mu.Lock()
 	m.unRegisterWithParent(path)
 	m.mu.Unlock()
@@ -291,8 +336,16 @@ func (m *MemMapFs) RemoveAll(path string) error {
 }
 
 func (m *MemMapFs) Rename(oldname, newname string) error {
-	oldname = normalizePath(oldname)
-	newname = normalizePath(newname)
+	var err error
+	oldname, err = normalizePath(oldname)
+	if err != nil {
+		return err
+	}
+
+	newname, err = normalizePath(newname)
+	if err != nil {
+		return err
+	}
 
 	if oldname == newname {
 		return nil
@@ -326,7 +379,11 @@ func (m *MemMapFs) Stat(name string) (os.FileInfo, error) {
 	return fi, nil
 }
 
-func (m *MemMapFs) Chmod(name string, mode os.FileMode) error {
+func (m *MemMapFs) Chmod(name string, mode os.FileMode) (err error) {
+	name, err = normalizePath(name)
+	if err != nil {
+		return err
+	}
 	mode &= chmodBits
 
 	m.mu.RLock()
@@ -341,8 +398,11 @@ func (m *MemMapFs) Chmod(name string, mode os.FileMode) error {
 	return m.setFileMode(name, mode)
 }
 
-func (m *MemMapFs) setFileMode(name string, mode os.FileMode) error {
-	name = normalizePath(name)
+func (m *MemMapFs) setFileMode(name string, mode os.FileMode) (err error) {
+	name, err = normalizePath(name)
+	if err != nil {
+		return err
+	}
 
 	m.mu.RLock()
 	f, ok := m.getData()[name]
@@ -359,7 +419,12 @@ func (m *MemMapFs) setFileMode(name string, mode os.FileMode) error {
 }
 
 func (m *MemMapFs) Chtimes(name string, atime time.Time, mtime time.Time) error {
-	name = normalizePath(name)
+	var err error
+	name, err = normalizePath(name)
+	if err != nil {
+		return err
+	}
+
 
 	m.mu.RLock()
 	f, ok := m.getData()[name]
