@@ -6,7 +6,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -480,21 +479,12 @@ func TestUnionFileReaddirAskForTooMany(t *testing.T) {
 
 	const testFiles = 5
 	for i := 0; i < testFiles; i++ {
-		file, err := filepath.Abs(fmt.Sprintf("/file%d.txt", i))
-		if err != nil {
-			t.Fatal(err)
-		}
-		WriteFile(base, file, []byte("afero"), 0777)
+		WriteFile(base, fmt.Sprintf("file%d.txt", i), []byte("afero"), 0777)
 	}
 
 	ufs := &CopyOnWriteFs{base: base, layer: overlay}
 
-	root, err := filepath.Abs("/")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	f, err := ufs.Open(root)
+	f, err := ufs.Open("")
 	if err != nil {
 		t.Fatal(err)
 	}
