@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	// "path/filepath"
 	"os"
 	"testing"
 	"time"
@@ -478,11 +479,11 @@ func TestUnionFileReaddirAskForTooMany(t *testing.T) {
 	overlay := &MemMapFs{}
 
 	for i := 0; i < 5; i++ {
-		WriteFile(base, fmt.Sprintf("file%d.txt", i), []byte("afero"), 0777)
+		WriteFile(base, fmt.Sprintf("/file%d.txt", i), []byte("afero"), 0777)
 	}
 
 	ufs := &CopyOnWriteFs{base: base, layer: overlay}
-
+	
 	f, err := ufs.Open("")
 	if err != nil {
 		t.Fatal(err)
