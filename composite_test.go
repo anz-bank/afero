@@ -479,7 +479,7 @@ func TestUnionFileReaddirAskForTooMany(t *testing.T) {
 
 	const testFiles = 5
 	for i := 0; i < testFiles; i++ {
-		WriteFile(base, fmt.Sprintf("file%d.txt", i), []byte("afero"), 0777)
+		WriteFile(base, fmt.Sprintf("/file%d.txt", i), []byte("afero"), 0777)
 	}
 
 	ufs := &CopyOnWriteFs{base: base, layer: overlay}
