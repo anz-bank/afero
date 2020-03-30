@@ -36,6 +36,13 @@ func (f *BasePathFile) Name() string {
 }
 
 func NewBasePathFs(source Fs, path string) Fs {
+	if !filepath.IsAbs(path) {
+		var err error
+		path, err = filepath.Abs(path)
+		if err != nil {
+			panic(err)
+		}
+	}
 	return &BasePathFs{source: source, path: path}
 }
 
